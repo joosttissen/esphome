@@ -114,9 +114,6 @@ void APIConnection::read_message_(uint32_t msg_size, uint32_t msg_type, const ui
     case CoverCommandRequest::MESSAGE_TYPE: {
       CoverCommandRequest msg;
       msg.decode(msg_data, msg_size);
-#ifdef HAS_PROTO_MESSAGE_DUMP
-      this->log_receive_message_(LOG_STR("on_cover_command_request"), msg);
-#endif
       this->on_cover_command_request(msg);
       break;
     }

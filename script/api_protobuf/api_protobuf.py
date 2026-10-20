@@ -2696,7 +2696,7 @@ def build_message_type(
 
             if case := ti.decode_content:
                 decode.extend(wrap_with_ifdef(case, field_ifdef))
-        if ti.dump_content:
+        if ti.dump_content and get_opt(desc, pb.log, True):
             # Check for field_ifdef option for dump as well
             field_ifdef = None
             if field.options.HasExtension(pb.field_ifdef):

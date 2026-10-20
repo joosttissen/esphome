@@ -1234,6 +1234,7 @@ const char *ListEntitiesCoverResponse::dump_to(DumpBuffer &out) const {
 #ifdef USE_DEVICES
   dump_field(out, ESPHOME_PSTR("device_id"), this->device_id);
 #endif
+  dump_field(out, ESPHOME_PSTR("requires_code_to_open"), this->requires_code_to_open);
   return out.c_str();
 }
 const char *CoverStateResponse::dump_to(DumpBuffer &out) const {
@@ -1248,16 +1249,7 @@ const char *CoverStateResponse::dump_to(DumpBuffer &out) const {
   return out.c_str();
 }
 const char *CoverCommandRequest::dump_to(DumpBuffer &out) const {
-  MessageDumpHelper helper(out, ESPHOME_PSTR("CoverCommandRequest"));
-  dump_field(out, ESPHOME_PSTR("key"), this->key);
-  dump_field(out, ESPHOME_PSTR("has_position"), this->has_position);
-  dump_field(out, ESPHOME_PSTR("position"), this->position);
-  dump_field(out, ESPHOME_PSTR("has_tilt"), this->has_tilt);
-  dump_field(out, ESPHOME_PSTR("tilt"), this->tilt);
-  dump_field(out, ESPHOME_PSTR("stop"), this->stop);
-#ifdef USE_DEVICES
-  dump_field(out, ESPHOME_PSTR("device_id"), this->device_id);
-#endif
+  out.append_p(ESPHOME_PSTR("CoverCommandRequest {}"));
   return out.c_str();
 }
 #endif
@@ -1500,9 +1492,7 @@ const char *SubscribeLogsRequest::dump_to(DumpBuffer &out) const {
   return out.c_str();
 }
 const char *SubscribeLogsResponse::dump_to(DumpBuffer &out) const {
-  MessageDumpHelper helper(out, ESPHOME_PSTR("SubscribeLogsResponse"));
-  dump_field(out, ESPHOME_PSTR("level"), static_cast<enums::LogLevel>(this->level));
-  dump_bytes_field(out, ESPHOME_PSTR("message"), this->message_ptr_, this->message_len_);
+  out.append_p(ESPHOME_PSTR("SubscribeLogsResponse {}"));
   return out.c_str();
 }
 #ifdef USE_API_NOISE

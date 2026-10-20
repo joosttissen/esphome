@@ -15,6 +15,8 @@
 
 namespace esphome::hoermann_hcp {
 
+class HoermannHcpCover;
+
 // Door state as reported by the Hoermann bus controller.
 enum class DoorState : uint8_t {
   OPEN,
@@ -90,6 +92,7 @@ class HoermannHcp : public PollingComponent, public modbus::ModbusServerDevice {
   // The door drives to these intermediate positions on its own, so neither takes a target to be stopped at.
   bool vent_door();
   bool half_open_door();
+  void set_opening_authorization_required() { this->opening_authorization_required_ = true; }
   bool stop_door();
   bool set_position(float position);
   // False while the door has not reported the lamp.
@@ -107,6 +110,12 @@ class HoermannHcp : public PollingComponent, public modbus::ModbusServerDevice {
   bool is_light_known() const { return this->light_seen_; }
   // The requested state while switching, else the reported one.
   bool is_light_heading_on() const { return this->light_requested_ ? this->light_target_ : this->light_on_; }
+
+ private:
+  friend class HoermannHcpCover;
+  bool open_door_from_cover_();
+  bool impulse_door_from_cover_();
+  bool set_position_from_cover_(float position);
 
  protected:
   void record_response_();
@@ -198,6 +207,7 @@ class HoermannHcp : public PollingComponent, public modbus::ModbusServerDevice {
   bool short_broadcast_logged_{false};
   // Only the read half right after a 0x17 write carries a command, so a second read without a new write does not.
   bool status_poll_pending_{false};
+  bool opening_authorization_required_{false};
 
 #ifdef USE_HOERMANN_HCP_IDENTITY
   uint32_t identity_asked_at_{0};

@@ -1,0 +1,97 @@
+esphome:
+  name: cover-authorization-test
+host:
+api:
+  encryption:
+    key: N4Yle5YirwZhPiHHsdZLdOA73ndj/84veVaLhTvxCuU=
+logger:
+
+globals:
+  - id: protected_open_calls
+    type: int
+    initial_value: "0"
+  - id: protected_close_calls
+    type: int
+    initial_value: "0"
+  - id: protected_stop_calls
+    type: int
+    initial_value: "0"
+  - id: protected_partial_calls
+    type: int
+    initial_value: "0"
+  - id: protected_toggle_calls
+    type: int
+    initial_value: "0"
+  - id: unprotected_open_calls
+    type: int
+    initial_value: "0"
+
+cover:
+  - platform: template
+    name: Protected Cover
+    id: protected_cover
+    has_position: true
+    optimistic: true
+    restore_mode: NO_RESTORE
+    authorization:
+      opening:
+        pin: "2468"
+        max_attempts: 3
+        lockout: 1s
+    open_action:
+      - lambda: id(protected_open_calls)++;
+    close_action:
+      - lambda: id(protected_close_calls)++;
+    stop_action:
+      - lambda: id(protected_stop_calls)++;
+    position_action:
+      - lambda: id(protected_partial_calls)++;
+    toggle_action:
+      - lambda: id(protected_toggle_calls)++;
+
+  - platform: template
+    name: Unprotected Cover
+    id: unprotected_cover
+    optimistic: true
+    restore_mode: NO_RESTORE
+    open_action:
+      - lambda: id(unprotected_open_calls)++;
+
+button:
+  - platform: template
+    name: Remote Open
+    id: remote_open
+    on_press:
+      - cover.open: protected_cover
+
+sensor:
+  - platform: template
+    name: Protected Open Calls
+    id: protected_open_calls_sensor
+    lambda: return id(protected_open_calls);
+    update_interval: 50ms
+  - platform: template
+    name: Protected Close Calls
+    id: protected_close_calls_sensor
+    lambda: return id(protected_close_calls);
+    update_interval: 50ms
+  - platform: template
+    name: Protected Stop Calls
+    id: protected_stop_calls_sensor
+    lambda: return id(protected_stop_calls);
+    update_interval: 50ms
+  - platform: template
+    name: Protected Partial Calls
+    id: protected_partial_calls_sensor
+    lambda: return id(protected_partial_calls);
+    update_interval: 50ms
+  - platform: template
+    name: Protected Toggle Calls
+    id: protected_toggle_calls_sensor
+    lambda: return id(protected_toggle_calls);
+    update_interval: 50ms
+  - platform: template
+    name: Unprotected Open Calls
+    id: unprotected_open_calls_sensor
+    lambda: return id(unprotected_open_calls);
+    update_interval: 50ms

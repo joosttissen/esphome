@@ -5,6 +5,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 #include "esphome/core/preferences.h"
+#include "esphome/core/string_ref.h"
 
 #include "cover_traits.h"
 
@@ -43,6 +44,8 @@ class CoverCall {
   CoverCall &set_position(float position);
   /// Set the call to a certain target tilt.
   CoverCall &set_tilt(float tilt);
+  /// Set the authorization code for protected cover operations.
+  CoverCall &set_authorization_code(StringRef code);
   /// Set whether this cover call should stop the cover.
   CoverCall &set_stop(bool stop);
 
@@ -62,6 +65,10 @@ class CoverCall {
   optional<float> position_{};
   optional<float> tilt_{};
   optional<bool> toggle_{};
+#ifdef USE_COVER_AUTHORIZATION
+  bool malformed_request_{false};
+  StringRef authorization_code_{};
+#endif
 };
 
 /// Struct used to store the restored state of a cover
@@ -125,6 +132,21 @@ class Cover : public EntityBase {
   /// Construct a new cover call used to control the cover.
   CoverCall make_call() { return {this}; }
 
+  /// Whether opening operations on this cover require an authorization code.
+  virtual bool requires_code_to_open() const {
+#ifdef USE_COVER_AUTHORIZATION
+    return this->authorization_pin_ != nullptr;
+#else
+    return false;
+#endif
+  }
+
+#ifdef USE_COVER_AUTHORIZATION
+  /// Configure the PIN and brute-force limits for opening operations.
+  virtual void set_authorization_opening(const char *pin, uint8_t max_attempts, uint32_t lockout_ms,
+                                         uint32_t preference_key);
+#endif
+
   template<typename F> void add_on_state_callback(F &&f) { this->state_callback_.add(std::forward<F>(f)); }
 
   /** Publish the current state of the cover.
@@ -145,6 +167,27 @@ class Cover : public EntityBase {
 
  protected:
   friend CoverCall;
+
+#ifdef USE_COVER_AUTHORIZATION
+  struct AuthorizationState {
+    uint8_t attempts;
+    uint8_t locked;
+  } __attribute__((packed));
+
+  bool authorize_opening_(StringRef code);
+  void load_authorization_state_();
+  bool save_authorization_state_();
+
+  const char *authorization_pin_{nullptr};
+  uint8_t authorization_pin_length_{0};
+  uint8_t authorization_max_attempts_{5};
+  uint8_t authorization_attempts_{0};
+  uint32_t authorization_lockout_ms_{300000};
+  uint32_t authorization_lockout_started_{0};
+  bool authorization_locked_{false};
+  bool authorization_state_loaded_{false};
+  ESPPreferenceObject authorization_pref_;
+#endif
 
   virtual void control(const CoverCall &call) = 0;
 

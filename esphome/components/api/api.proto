@@ -601,6 +601,7 @@ message ListEntitiesCoverResponse {
   EntityCategory entity_category = 11;
   bool supports_stop = 12;
   uint32 device_id = 13 [(field_ifdef) = "USE_DEVICES"];
+  bool requires_code_to_open = 14;
 }
 
 // Deprecated in API version 1.1
@@ -643,6 +644,7 @@ enum LegacyCoverCommand {
 message CoverCommandRequest {
   option (id) = 30;
   option (source) = SOURCE_CLIENT;
+  option (log) = false;
   option (ifdef) = "USE_COVER";
   option (no_delay) = true;
   option (base_class) = "CommandProtoMessage";
@@ -662,6 +664,8 @@ message CoverCommandRequest {
   float tilt = 7;
   bool stop = 8;
   uint32 device_id = 9 [(field_ifdef) = "USE_DEVICES"];
+  string code = 10 [(max_data_length) = 12];
+  bool toggle = 11;
 }
 
 // ==================== FAN ====================

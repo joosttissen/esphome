@@ -14,6 +14,7 @@ from esphome.const import (
     CONF_MQTT_JSON_STATE_PAYLOAD,
     CONF_ON_IDLE,
     CONF_ON_OPEN,
+    CONF_PIN,
     CONF_POSITION,
     CONF_POSITION_COMMAND_TOPIC,
     CONF_POSITION_STATE_TOPIC,
@@ -44,6 +45,8 @@ from esphome.core.entity_helpers import (
     setup_entity,
 )
 from esphome.cpp_generator import MockObj, MockObjClass
+import esphome.final_validate as fv
+from esphome.helpers import fnv1_hash
 from esphome.types import ConfigType, SafeExpType
 
 IS_PLATFORM_COMPONENT = True
@@ -99,6 +102,10 @@ CONF_ON_CLOSED = "on_closed"
 CONF_ON_OPENED = "on_opened"
 CONF_ON_OPENING = "on_opening"
 CONF_ON_CLOSING = "on_closing"
+CONF_AUTHORIZATION = "authorization"
+CONF_OPENING = "opening"
+CONF_MAX_ATTEMPTS = "max_attempts"
+CONF_LOCKOUT = "lockout"
 
 TRIGGERS = {
     CONF_ON_OPEN: CoverOpenedTrigger,  # Deprecated, use on_opened
@@ -108,6 +115,33 @@ TRIGGERS = {
     CONF_ON_OPENING: CoverTrigger.template(CoverOperation.COVER_OPERATION_OPENING),
     CONF_ON_IDLE: CoverTrigger.template(CoverOperation.COVER_OPERATION_IDLE),
 }
+
+
+def _validate_authorization_pin(pin: str) -> str:
+    if not 4 <= len(pin) <= 12 or not pin.isascii() or not pin.isdigit():
+        raise cv.Invalid("PIN must contain 4 to 12 ASCII digits")
+    return pin
+
+
+def _validate_lockout(value: ConfigType) -> ConfigType:
+    lockout = cv.positive_time_period_milliseconds(value)
+    milliseconds = lockout.total_milliseconds
+    if milliseconds <= 0 or milliseconds > 0xFFFFFFFF:
+        raise cv.Invalid("lockout must be between 1 and 4294967295 milliseconds")
+    return lockout
+
+
+_COVER_AUTHORIZATION_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_OPENING): cv.Schema(
+            {
+                cv.Required(CONF_PIN): cv.All(cv.string, _validate_authorization_pin),
+                cv.Optional(CONF_MAX_ATTEMPTS, default=5): cv.int_range(min=1, max=255),
+                cv.Optional(CONF_LOCKOUT, default="5min"): _validate_lockout,
+            }
+        )
+    }
+)
 
 
 _COVER_SCHEMA = (
@@ -122,6 +156,7 @@ _COVER_SCHEMA = (
             cv.Optional(
                 CONF_DEVICE_CLASS, visibility=cv.Visibility.ADVANCED
             ): cv.one_of(*DEVICE_CLASSES, lower=True),
+            cv.Optional(CONF_AUTHORIZATION): _COVER_AUTHORIZATION_SCHEMA,
             cv.Optional(CONF_POSITION_COMMAND_TOPIC): cv.All(
                 cv.requires_component("mqtt"), cv.subscribe_topic
             ),
@@ -163,7 +198,30 @@ def _validate_mqtt_state_topics(config: ConfigType) -> ConfigType:
     return config
 
 
+def _contains_cover_authorization(config: object) -> bool:
+    if isinstance(config, list):
+        return any(_contains_cover_authorization(item) for item in config)
+    if isinstance(config, dict):
+        return CONF_AUTHORIZATION in config or any(
+            _contains_cover_authorization(value) for value in config.values()
+        )
+    return False
+
+
+def _validate_authorization_transport(config: ConfigType) -> ConfigType:
+    if _contains_cover_authorization(config):
+        api_config = fv.full_config.get().get("api", {})
+        encryption = api_config.get("encryption", {})
+        if not encryption.get("key"):
+            raise cv.Invalid(
+                "cover opening authorization requires 'api.encryption.key'"
+            )
+    return config
+
+
 _COVER_SCHEMA.add_extra(_validate_mqtt_state_topics)
+
+FINAL_VALIDATE_SCHEMA = _validate_authorization_transport
 
 
 def cover_schema(
@@ -191,6 +249,18 @@ def cover_schema(
 @setup_entity("cover")
 async def setup_cover_core_(var: MockObj, config: ConfigType) -> None:
     setup_device_class(config)
+
+    if (authorization := config.get(CONF_AUTHORIZATION)) is not None:
+        cg.add_define("USE_COVER_AUTHORIZATION")
+        opening = authorization[CONF_OPENING]
+        cg.add(
+            var.set_authorization_opening(
+                opening[CONF_PIN],
+                opening[CONF_MAX_ATTEMPTS],
+                opening[CONF_LOCKOUT].total_milliseconds,
+                fnv1_hash(f"cover.authorization.{config[CONF_ID].id}"),
+            )
+        )
 
     if CONF_ON_OPEN in config:
         _LOGGER.warning(

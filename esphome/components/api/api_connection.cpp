@@ -555,16 +555,30 @@ uint16_t APIConnection::try_send_cover_info(EntityBase *entity, APIConnection *c
   msg.supports_position = traits.get_supports_position();
   msg.supports_tilt = traits.get_supports_tilt();
   msg.supports_stop = traits.get_supports_stop();
+  msg.requires_code_to_open = cover->requires_code_to_open();
   return fill_and_encode_entity_info_with_device_class(cover, msg, msg.device_class, conn, remaining_size);
 }
 void APIConnection::on_cover_command_request(const CoverCommandRequest &msg) {
   ENTITY_COMMAND_MAKE_CALL(cover::Cover, cover, cover)
+  const bool protected_request = msg.toggle || msg.has_tilt || (msg.has_position && msg.position != 0.0f) ||
+                                 (msg.stop && (msg.has_position || msg.has_tilt || msg.toggle));
+  if (cover->requires_code_to_open() && (protected_request || !msg.code.empty())) {
+#ifdef USE_API_NOISE
+    if (this->helper_->frame_footer_size() == 0 || !this->parent_->get_noise_ctx().has_psk())
+      return;
+#else
+    return;
+#endif
+  }
+  call.set_authorization_code(msg.code);
   if (msg.has_position)
     call.set_position(msg.position);
   if (msg.has_tilt)
     call.set_tilt(msg.tilt);
   if (msg.stop)
     call.set_command_stop();
+  if (msg.toggle)
+    call.set_command_toggle();
   call.perform();
 }
 #endif
@@ -1916,7 +1930,7 @@ bool APIConnection::send_hello_response_(const HelloRequest &msg) {
 
   HelloResponse resp;
   resp.api_version_major = 1;
-  resp.api_version_minor = 19;
+  resp.api_version_minor = 21;
   // Send only the version string - the client only logs this for debugging and doesn't use it otherwise
   resp.server_info = esphome_version_ref();
   resp.name = StringRef(App.get_name());

@@ -6,6 +6,16 @@
 
 namespace esphome::hoermann_hcp::testing {
 
+#ifdef USE_COVER_AUTHORIZATION
+namespace {
+class TestableHoermannHcpCover : public HoermannHcpCover {
+ public:
+  using HoermannHcpCover::HoermannHcpCover;
+  void configure_for_test(const char *name, uint32_t hash) { this->configure_entity_(name, hash, 0); }
+};
+}  // namespace
+#endif
+
 // Cover::position starts at COVER_OPEN, so a door that is already closed still has a state to publish.
 TEST(HoermannHcpCoverTest, ClosedDoorPublishesItsInitialPosition) {
   HoermannHcp door;
@@ -91,6 +101,25 @@ TEST(HoermannHcpCoverTest, ToggleCommandSendsAnImpulse) {
   cover.make_call().set_command_toggle().perform();
   EXPECT_EQ(poll_command(door).first, 0x0140);  // COMMAND_IMPULSE
 }
+
+#ifdef USE_COVER_AUTHORIZATION
+TEST(HoermannHcpCoverTest, UnprotectedAliasCannotOpenProtectedHub) {
+  HoermannHcp door;
+  TestableHoermannHcpCover protected_cover(&door);
+  TestableHoermannHcpCover unprotected_alias(&door);
+  protected_cover.set_authorization_opening("1234", 5, 300000);
+  protected_cover.configure_for_test("protected", 0x1234);
+  unprotected_alias.configure_for_test("alias", 0x5678);
+  connect_controller(door);
+
+  EXPECT_TRUE(unprotected_alias.requires_code_to_open());
+  unprotected_alias.make_call().set_command_open().perform();
+  EXPECT_EQ(poll_command(door).first, 0x0000);
+
+  unprotected_alias.make_call().set_command_close().perform();
+  EXPECT_EQ(poll_command(door).first, 0x0120);
+}
+#endif
 
 TEST(HoermannHcpCoverTest, StopCommandStopsAMovingDoor) {
   HoermannHcp door;

@@ -28,15 +28,23 @@ void HoermannHcpCover::control(const cover::CoverCall &call) {
   if (call.get_stop())
     accepted &= this->parent_->stop_door();
   if (call.get_toggle().has_value())
-    accepted &= this->parent_->impulse_door();
+    accepted &= this->parent_->impulse_door_from_cover_();
   if (const auto position = call.get_position())
-    accepted &= this->parent_->set_position(*position);
+    accepted &= this->parent_->set_position_from_cover_(*position);
   if (!accepted) {
     // The command never reached the door, so publish the unchanged state over the one the caller assumed.
     ESP_LOGW(TAG, "Command was not accepted by the door");
     this->publish_state(false);
   }
 }
+
+#ifdef USE_COVER_AUTHORIZATION
+void HoermannHcpCover::set_authorization_opening(const char *pin, uint8_t max_attempts, uint32_t lockout_ms,
+                                                 uint32_t preference_key) {
+  cover::Cover::set_authorization_opening(pin, max_attempts, lockout_ms, preference_key);
+  this->parent_->set_opening_authorization_required();
+}
+#endif
 
 void HoermannHcpCover::update_from_state_() {
   if (!this->status_comm_result(this->parent_->is_valid(), LOG_STR("bus controller not responding"))) {

@@ -46,6 +46,18 @@ TEST(HoermannHcpReadWrite, IdleCommandPollHasNoCommand) {
   EXPECT_EQ(response[3], 0x0000);
 }
 
+TEST(HoermannHcpReadWrite, AuxiliaryOpeningCommandsAreBlockedForProtectedCover) {
+  HoermannHcp door;
+  door.set_opening_authorization_required();
+
+  EXPECT_FALSE(door.open_door());
+  EXPECT_FALSE(door.impulse_door());
+  EXPECT_FALSE(door.set_position(0.5f));
+  EXPECT_FALSE(door.vent_door());
+  EXPECT_FALSE(door.half_open_door());
+  EXPECT_EQ(poll_command(door).first, 0x0000);
+}
+
 // A queued control command is injected into the next command poll.
 TEST(HoermannHcpReadWrite, QueuedCommandIsInjectedIntoPoll) {
   HoermannHcp door;

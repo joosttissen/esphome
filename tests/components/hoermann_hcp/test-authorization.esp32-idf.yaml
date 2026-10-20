@@ -1,0 +1,40 @@
+esphome:
+  name: hoermann-hcp-authorization-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: test-network
+  password: test-password
+
+api:
+  encryption:
+    key: N4Yle5YirwZhPiHHsdZLdOA73ndj/84veVaLhTvxCuU=
+
+packages:
+  modbus_server: !include ../../test_build_components/common/modbus_server/esp32-idf.yaml
+
+hoermann_hcp:
+  id: hoermann_hcp_hub
+  modbus_id: modbus_server_bus
+
+cover:
+  - platform: hoermann_hcp
+    id: garage_door
+    name: Garage Door
+    authorization:
+      opening:
+        pin: "2468"
+
+button:
+  - platform: hoermann_hcp
+    hoermann_hcp_id: hoermann_hcp_hub
+    vent:
+      name: Garage Vent
+    half_open:
+      name: Garage Half Open

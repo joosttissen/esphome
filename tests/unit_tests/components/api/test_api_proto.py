@@ -481,26 +481,70 @@ def test_sendspin_pairing_token_rpc_requires_authentication() -> None:
     assert "needs_authentication" not in body
 
 
+def test_cover_authorization_fields_keep_their_wire_numbers() -> None:
+    discovery_body = _extract_proto_message(PROTO_TEXT, "ListEntitiesCoverResponse")
+    discovery_line = _field_declaration_line(discovery_body, "requires_code_to_open")
+    assert re.search(r"\brequires_code_to_open\s*=\s*14\b", discovery_line)
+
+    command_body = _extract_proto_message(PROTO_TEXT, "CoverCommandRequest")
+    code_line = _field_declaration_line(command_body, "code")
+    toggle_line = _field_declaration_line(command_body, "toggle")
+    assert re.search(r"\bcode\s*=\s*10\b", code_line)
+    assert "max_data_length) = 12" in code_line
+    assert re.search(r"\btoggle\s*=\s*11\b", toggle_line)
+    assert "option (log) = false;" in command_body
+
+
+def test_cover_authorization_is_wired_through_the_api_handler() -> None:
+    discovery = _extract_function_body(
+        API_CONNECTION_TEXT, "APIConnection::try_send_cover_info"
+    )
+    command = _extract_function_body(
+        API_CONNECTION_TEXT, "APIConnection::on_cover_command_request"
+    )
+    assert "msg.requires_code_to_open = cover->requires_code_to_open();" in discovery
+    assert "cover->requires_code_to_open()" in command
+    assert "this->helper_->frame_footer_size() == 0" in command
+    assert "this->parent_->get_noise_ctx().has_psk()" in command
+    assert "msg.position != 0.0f" in command
+    assert "msg.has_tilt" in command
+    assert "!msg.code.empty()" in command
+    assert "call.set_authorization_code(msg.code);" in command
+    assert "call.set_command_toggle();" in command
+
+    command_dispatch = _extract_braced_region(
+        SERVICE_TEXT, r"case CoverCommandRequest::MESSAGE_TYPE"
+    )
+    assert "log_receive_message_" not in command_dispatch
+
+
+def test_cover_authorization_fields_are_generated_for_the_wire() -> None:
+    cover_info = _extract_function_body(
+        CPP_TEXT, "ListEntitiesCoverResponse::encode_msg"
+    )
+    cover_command = _extract_function_body(
+        CPP_TEXT, "CoverCommandRequest::decode_field"
+    )
+    assert "14, msg.requires_code_to_open" in cover_info
+    assert "proto_tag(10, WIRE_TYPE_LENGTH_DELIMITED)" in cover_command
+    assert "msg.code = StringRef(value.data(), value.size());" in cover_command
+    assert "proto_tag(11, WIRE_TYPE_VARINT)" in cover_command
+    assert "msg.toggle = value.as_bool();" in cover_command
+
+
 # ==================== Group C: advertised API version ====================
 
 
-def test_api_version_minor_is_at_least_15() -> None:
-    """Clients gate sending DeviceCapabilitiesRequest on seeing
-    api_version >= 1.15 in HelloResponse. Regressing api_version_minor below
-    15 would make every client believe capabilities are unsupported even
-    though the RPC exists, so this must never go backwards. Use >= rather
-    than == so the next unrelated minor-version bump doesn't need to touch
-    this test.
-    """
+def test_api_version_minor_is_at_least_21() -> None:
+    """Clients gate new API fields on the advertised protocol version."""
     match = re.search(r"resp\.api_version_minor\s*=\s*(\d+);", API_CONNECTION_TEXT)
     assert match is not None, (
         "could not find `resp.api_version_minor = N;` in api_connection.cpp"
     )
     minor = int(match.group(1))
-    assert minor >= 15, (
-        f"api_version_minor is {minor}, but device_capabilities requires "
-        "clients to see api_version >= 1.15 in HelloResponse before they will "
-        "ever request it."
+    assert minor >= 21, (
+        f"api_version_minor is {minor}, but secured cover commands require "
+        "clients to see api_version >= 1.21 in HelloResponse."
     )
 
 

@@ -322,6 +322,19 @@ def test_message_decodes_through_one_static_decode_field() -> None:
     )
 
 
+def test_non_logging_message_dump_omits_fields() -> None:
+    """Messages disabled from API logs must not expose their fields through dumps."""
+    desc = descriptor_pb2.DescriptorProto(name="PrivateRequest")
+    desc.options.Extensions[pb.log] = False
+    desc.field.add(name="code", number=1, type=STRING)
+
+    _, _, dump = build_message_type(desc, {}, {"PrivateRequest": SOURCE_CLIENT})
+
+    assert "PrivateRequest {}" in dump
+    assert "code" not in dump
+    assert "dump_field" not in dump
+
+
 def test_fixed_vector_message_keeps_its_own_decode() -> None:
     """A message that sizes a FixedVector first decodes through its own decode(), not the inline one."""
     desc = descriptor_pb2.DescriptorProto(name="Sized")

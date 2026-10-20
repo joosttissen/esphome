@@ -605,11 +605,37 @@ bool HoermannHcp::command_door_(const HoermannHcpCommand &command) {
   return this->queue_command_(command);
 }
 
-bool HoermannHcp::open_door() { return this->command_door_(COMMAND_OPEN); }
+bool HoermannHcp::open_door() {
+  if (this->opening_authorization_required_) {
+    ESP_LOGW(TAG, "Open command blocked because cover opening authorization is enabled");
+    return false;
+  }
+  return this->open_door_from_cover_();
+}
 bool HoermannHcp::close_door() { return this->command_door_(COMMAND_CLOSE); }
-bool HoermannHcp::impulse_door() { return this->command_door_(COMMAND_IMPULSE); }
-bool HoermannHcp::vent_door() { return this->command_door_(COMMAND_VENT); }
-bool HoermannHcp::half_open_door() { return this->command_door_(COMMAND_HALF_OPEN); }
+bool HoermannHcp::impulse_door() {
+  if (this->opening_authorization_required_) {
+    ESP_LOGW(TAG, "Impulse command blocked because cover opening authorization is enabled");
+    return false;
+  }
+  return this->impulse_door_from_cover_();
+}
+bool HoermannHcp::open_door_from_cover_() { return this->command_door_(COMMAND_OPEN); }
+bool HoermannHcp::impulse_door_from_cover_() { return this->command_door_(COMMAND_IMPULSE); }
+bool HoermannHcp::vent_door() {
+  if (this->opening_authorization_required_) {
+    ESP_LOGW(TAG, "Vent command blocked because cover opening authorization is enabled");
+    return false;
+  }
+  return this->command_door_(COMMAND_VENT);
+}
+bool HoermannHcp::half_open_door() {
+  if (this->opening_authorization_required_) {
+    ESP_LOGW(TAG, "Half-open command blocked because cover opening authorization is enabled");
+    return false;
+  }
+  return this->command_door_(COMMAND_HALF_OPEN);
+}
 bool HoermannHcp::stop_door() {
   this->clear_target_();
   // A stop outranks whatever is still waiting, so a door at rest does not start after the user pressed stop.
@@ -635,11 +661,19 @@ bool HoermannHcp::stop_door() {
 }
 
 bool HoermannHcp::set_position(float position) {
+  if (this->opening_authorization_required_ && position != 0.0f) {
+    ESP_LOGW(TAG, "Position command blocked because cover opening authorization is enabled");
+    return false;
+  }
+  return this->set_position_from_cover_(position);
+}
+
+bool HoermannHcp::set_position_from_cover_(float position) {
   // The first and last movement segments are inconsistent on some doors, so snap to fully open/closed.
   if (position <= CLOSE_POSITION_THRESHOLD)
     return this->close_door();
   if (position >= OPEN_POSITION_THRESHOLD)
-    return this->open_door();
+    return this->open_door_from_cover_();
   // Asking the door to travel to where it already is, or anywhere while it moves, means stopping it.
   if (position == this->current_position_ || this->is_moving_or_starting_())
     return this->stop_door();
